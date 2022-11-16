@@ -1,0 +1,204 @@
+#Install the needed packages
+
+install.packages("read.xlsx")   #To load excel files
+install.packages("dplyr")       #The almighty dplyr use for data manipulation e.g select, filter, mutatate etc.
+install.packages("epiR")        #Package for descriptive statistics
+install.packages("epitools")    #Needed for our contingency tables
+install.packages("naniar")      #For exploring missing data
+install.packages("summarytools")#For generating frequency tables
+install.packages("ggplot2")     #For generating charts
+
+
+#Load the installed packages
+library(readxl)
+library(dplyr)
+library(epiR)
+library(epitools)
+library(summarytools)
+library(ggplot2)
+library(naniar)
+library(caret)
+
+#Load the data set
+Intestinal_parasites <- read_excel("C:/Users/CARE-IT COMPLEX/Desktop/Charmy/Intestinal_parasites.xlsx")
+#view the entire data
+View(Intestinal_parasites)
+
+#View just the first six rows i.e. the head
+head(Intestinal_parasites)
+
+#confirm the type
+typeof(Intestinal_parasites)
+#check the class
+class(Intestinal_parasites)
+
+#convert the class from list to a data frame
+df <- data.frame(Intestinal_parasites, stringsAsFactors =F)
+class(df)
+
+#check for the number of missing values in each variable of the data set
+apply(X = is.na(df), MARGIN = 2, FUN = sum)
+
+# Visualize the missing values
+plot1 <- vis_miss(df)
+plot1  
+
+# The results give us the percentage of missing data for each variable, we can ignore from 0 - 5% such as it is the case here,
+# no variable has more than 5% of missing values.
+
+#During data entry, gender and age range were categorized: 1 = male, 2 = female; for age group 1 = 11 to 30 yeas & 2= >30 years.
+#We will have to label so that R understands what they mean.
+
+
+#Let's attach value labels to Gender and age group
+df$Gender <- factor(df$Gender,
+                    levels = c(1,2),
+                    labels = c("Male", "Female"))
+
+df$Agerange <- factor(df$Agerange,
+                      levels = c(1,2),
+                      labels = c("11 - 30 years", ">30 years"))
+
+#Let's make our dependent variable dummy
+
+df$Result <- factor(df$Result,
+                      levels = c("Positive","Negative"),
+                      labels = c(1, 0))
+
+##########################################################################################################################################
+
+st_options(freq.ignore.threshold = 10)
+
+
+#Select only demographic data
+df1 <- select(df, c("Gender", "Agerange", "Workingstatus", "Maritalstatus", "LevelofEducation", "Wages"))
+head(df1)
+
+#Generate frequency tables for the demographic data
+table1 <- summarytools::freq(df1)
+table1
+
+#Get the prevalence of intestinal parasites in the population under study.
+table2<- summarytools::freq(df$Result)
+table2  #Prevalence is 7.88% ~ 7.9%
+
+#Get the prevalence of each intestinal parasite that was identified
+df3 <- select(df, c("E.hist", "G.lamblia", "I.beli", "Ascaris", "Taenia", "T.hominis"))
+head(df3)
+table3 <- summarytools::freq(df3)
+table3
+
+
+#Cross tabs and association between demographic data and intestinal parasitic result of the participants.
+#Gender
+Gender = ctable(x = df$Gender, y = df$Result)
+Gender                
+
+chisq.test(df$Gender, df$Result)
+
+#Age
+Age = ctable(x = df$Agerange,y = df$Result)
+Age
+
+chisq.test(df$Agerange, df$Result)
+
+#Working status
+work = ctable(x = df$Workingstatus,y = df$Result)
+work
+
+chisq.test(df$Workingstatus, df$Result)
+
+#Marital status
+marriage = ctable(x = df$Maritalstatus,y = df$Result)
+marriage
+
+chisq.test(df$Maritalstatus, df$Result)
+
+#Education
+education = ctable(x = df$LevelofEducation,y = df$Result)
+education
+
+chisq.test(df$LevelofEducation, df$Result)
+
+#Wages
+wage = ctable(x = df$Wages,y = df$Result)
+wage
+
+chisq.test(df$Wages, df$Result)
+
+
+#There is a significant association between marital status and infestation with intestinal
+#parasites (p= 0.02). Singles (Divorced individuals and those who have never been married have
+# the highest infection rates)
+
+#Also, there is a significant association between Level of education and infestation with intestinal
+#parasites (p= 0.005).Those with primary level of education were the most infested. 
+
+# Another significant association is observed between income (Wages) and infestation with
+#intestinal parasites (p = 0.01). Those with no income were the most infected followed by those who 
+#earn <35,000, this can be seen from the cross tabulation
+
+
+##########################################################################################
+#Association between Parasitic infestation and identified risk factors
+
+#Water type
+water_type = ctable(x = df$Typeofwaterconsumed,y = df$Result)
+water_type
+
+chisq.test(df$Typeofwaterconsumed, df$Result)
+
+#Co infection
+co_infection = ctable(x = df$Coinfection,y = df$Result)
+co_infection
+
+chisq.test(df$Coinfection, df$Result)
+
+
+#viral load
+vload = ctable(x = df$Viralload,y = df$Result)
+vload
+
+chisq.test(df$Viralload, df$Result)
+
+#Number of inhabitants in a house
+household = ctable(x = df$Howmanyinhouse, y = df$Result)
+household
+
+chisq.test(df$Howmanyinhouse, df$Result)
+
+
+#Type of toilet
+toilet = ctable(x = df$Typeoftoilet,y = df$Result)
+toilet
+
+chisq.test(df$Typeoftoilet, df$Result)
+
+# The following are significant (p< 0.05):water type,viral load, household inhabitants, type of toilet
+
+##############################################################################################################
+#Logistic regression
+
+# We will run a binary logistic regression using all the significant factors (Both demographic and risk)
+
+#First  let's select the significant factors plus the dependent variable (Result)
+df3 <- select(df, c( "Maritalstatus", "LevelofEducation", "Wages","Typeofwaterconsumed",
+                     "Viralload","Howmanyinhouse","Typeoftoilet", "Result"))
+head(df3)
+
+#logistics regression
+logit_model <- glm(Result ~., family = binomial(), data = df3)
+summary(logit_model)
+
+# The categories not seen for example Marital status - divorced are used as reference categories
+# only Marital status- married and viral load > 40 are significant, Lets get the odds
+#1 odds of being married and coming down with a parasitic infestation compared to being divorced
+exp(0.0119)
+# ans is 1.011971
+# interpretation is there is no change in coming down with parasitic infection if your are married or divorced because the odds = 1
+
+#2 odds of being having viral load <40 and coming down with a parasitic infestation compared to >40
+exp(0.0270)
+# ans is 1.027368
+# interpretation is there is no change in coming down with a parasitic infection based on viral load of >or< 40 because the odds = 1,
+# if the odds were 2, it will mean a 2 fold change i.e someone with viral load of <40 is twice as much to come down with a parasitic infection compared to someone with viral load >40 and vice versa if it were - 2.
